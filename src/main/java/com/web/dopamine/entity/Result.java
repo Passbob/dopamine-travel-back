@@ -17,13 +17,14 @@ import lombok.Builder;
 public class Result {
     
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "no")
     private Integer no;
     
     @Column(name = "city_no")
     private Integer cityNo;
     
-    @Column(name = "privince_no")
+    @Column(name = "province_no")
     private Integer provinceNo;
     
     @Column(name = "location")
@@ -68,7 +69,7 @@ public class Result {
     private City city;
     
     @ManyToOne
-    @JoinColumn(name = "privince_no", insertable = false, updatable = false)
+    @JoinColumn(name = "province_no", insertable = false, updatable = false)
     private Province province;
 
     @Builder

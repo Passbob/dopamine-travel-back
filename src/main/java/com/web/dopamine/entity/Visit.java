@@ -16,6 +16,7 @@ import lombok.Builder;
 public class Visit {
     
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "no")
     private Integer no;
     

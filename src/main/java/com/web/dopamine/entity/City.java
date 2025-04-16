@@ -23,17 +23,11 @@ public class City {
     
     @Column(name = "name")
     private String name;
-    
-    @ManyToOne
-    @JoinColumn(name = "province_no", insertable = false, updatable = false)
-    private Province province;
 
     @Builder
-    public City(Integer no, Integer provinceNo, String name, Province province) {
+    public City(Integer no, Integer provinceNo, String name) {
         this.no = no;
         this.provinceNo = provinceNo;
         this.name = name;
-        this.province = province;
     }
-    
 } 
