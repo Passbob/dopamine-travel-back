@@ -19,6 +19,7 @@ public class SecurityConfig {
             // 요청 경로별 인증 설정
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/prototype/**").permitAll()  // 프로토타입 API는 모두 허용
+                .requestMatchers("/api/total-visits").permitAll()   // 총 방문자 수 API도 허용
                 .requestMatchers("/health", "/actuator/**").permitAll()  // 헬스 체크 및 모니터링 허용
                 .anyRequest().authenticated())  // 다른 모든 요청은 인증 필요
                 
