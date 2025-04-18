@@ -24,26 +24,12 @@ public class AITravelController {
     @PostMapping("/generate")
     public ApiResponse<Result> generateTravelCourse(
             @RequestParam Integer provinceNo,
-            @RequestParam Integer cityNo) {
-        Result result = aiTravelService.generateTravelCourse(provinceNo, cityNo);
+            @RequestParam Integer cityNo,
+            @RequestParam Integer themeNo,
+            @RequestParam Integer constraintNo
+
+    ) {
+        Result result = aiTravelService.generateTravelCourse(provinceNo, cityNo, themeNo, constraintNo);
         return ApiResponse.success(result);
-    }
-    
-    /**
-     * 랜덤 도/시에 대한 AI 여행 코스 생성 및 조회
-     */
-    @PostMapping("/generate/random")
-    public ApiResponse<CourseDto> generateRandomTravelCourse() {
-        // 랜덤 도 선택
-        Integer provinceNo = randomService.getRandomProvince().getNo();
-        
-        // 선택된 도에서 랜덤 시/군 선택
-        Integer cityNo = randomService.getRandomCityByProvince(provinceNo).getNo();
-        
-        // AI 여행 코스 생성
-        Result result = aiTravelService.generateTravelCourse(provinceNo, cityNo);
-        
-        // Result를 CourseDto로 변환하여 반환
-        return ApiResponse.success(randomService.getRandomCourse(provinceNo, cityNo));
     }
 } 

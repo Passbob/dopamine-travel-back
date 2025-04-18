@@ -9,6 +9,14 @@ import java.util.List;
 @Repository
 public interface ResultRepository extends JpaRepository<Result, Integer> {
     
-    // 특정 도와 시에 속한 결과 목록 조회
+    /**
+     * 도/시, 테마, 제약조건으로 결과를 검색합니다.
+     */
+    List<Result> findByProvinceNoAndCityNoAndThemeNoAndConstraintNo(
+            Integer provinceNo, Integer cityNo, Integer themeNo, Integer constraintNo);
+    
+    /**
+     * 도/시로 결과를 검색합니다.
+     */
     List<Result> findByProvinceNoAndCityNo(Integer provinceNo, Integer cityNo);
 } 

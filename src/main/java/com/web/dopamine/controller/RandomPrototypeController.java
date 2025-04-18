@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.web.dopamine.common.ApiResponse;
 import com.web.dopamine.common.Constants;
 import com.web.dopamine.dto.CityDto;
+import com.web.dopamine.dto.ConstraintDto;
 import com.web.dopamine.dto.CourseDto;
 import com.web.dopamine.dto.ProvinceDto;
+import com.web.dopamine.dto.ThemeDto;
 import com.web.dopamine.entity.City;
 import com.web.dopamine.entity.Province;
 import com.web.dopamine.entity.Result;
@@ -16,7 +18,9 @@ import com.web.dopamine.repository.ProvinceRepository;
 import com.web.dopamine.repository.ResultRepository;
 import com.web.dopamine.repository.VisitRepository;
 import com.web.dopamine.service.AITravelService;
+import com.web.dopamine.service.ConstraintService;
 import com.web.dopamine.service.MockTravelService;
+import com.web.dopamine.service.ThemeService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +48,8 @@ public class RandomPrototypeController {
     private final CityRepository cityRepository;
     private final ResultRepository resultRepository;
     private final VisitRepository visitRepository;
+    private final ThemeService themeService;
+    private final ConstraintService constraintService;
     private final ObjectMapper objectMapper;
     private final Random random = new Random();
     
@@ -65,6 +71,26 @@ public class RandomPrototypeController {
                 .map(ProvinceDto::fromEntity)
                 .collect(Collectors.toList());
         return ApiResponse.success(provinceDtos);
+    }
+
+    /**
+     * 모든 테마 목록 조회 API
+     */
+    @GetMapping("/themes")
+    public ApiResponse<List<ThemeDto>> getAllThemes() {
+        log.info("모든 테마 목록 조회");
+        List<ThemeDto> themes = themeService.getAllThemes();
+        return ApiResponse.success(themes);
+    }
+
+    /**
+     * 모든 제약조건 목록 조회 API
+     */
+    @GetMapping("/constraints")
+    public ApiResponse<List<ConstraintDto>> getAllConstraints() {
+        log.info("모든 제약조건 목록 조회");
+        List<ConstraintDto> constraints = constraintService.getAllConstraints();
+        return ApiResponse.success(constraints);
     }
 
     /**
@@ -90,12 +116,24 @@ public class RandomPrototypeController {
     public ApiResponse<CourseDto> getTravelCourse(
             @RequestParam Integer provinceNo, 
             @RequestParam Integer cityNo,
+            @RequestParam(required = false) Integer themeNo,
+            @RequestParam(required = false) Integer constraintNo,
             HttpServletRequest request) {
         
-        log.info("여행 코스 추천 요청 - provinceNo: {}, cityNo: {}", provinceNo, cityNo);
+        log.info("여행 코스 추천 요청 - provinceNo: {}, cityNo: {}, themeNo: {}, constraintNo: {}", 
+                provinceNo, cityNo, themeNo, constraintNo);
+        
+        // 기본값 설정
+        if (themeNo == null) {
+            themeNo = 1; // 기본 테마 (DB에 존재하는 ID 사용)
+        }
+        if (constraintNo == null) {
+            constraintNo = 1; // 기본 제약조건 (DB에 존재하는 ID 사용)
+        }
         
         // 기존 데이터가 있는지 확인
-        List<Result> existingResults = resultRepository.findByProvinceNoAndCityNo(provinceNo, cityNo);
+        List<Result> existingResults = resultRepository.findByProvinceNoAndCityNoAndThemeNoAndConstraintNo(
+                provinceNo, cityNo, themeNo, constraintNo);
         
         Result result;
         // 50% 확률로 기존 데이터 사용 또는 새로 생성
@@ -106,10 +144,10 @@ public class RandomPrototypeController {
         } else {
             // 새로운 코스 생성 (테스트 프로파일 여부에 따라 다른 서비스 호출)
             if (mockTravelService != null) {
-                result = mockTravelService.generateTravelCourse(provinceNo, cityNo);
+                result = mockTravelService.generateTravelCourse(provinceNo, cityNo, themeNo, constraintNo);
                 log.info("MockTravelService로 코스 생성 - resultNo: {}", result.getNo());
             } else if (aiTravelService != null) {
-                result = aiTravelService.generateTravelCourse(provinceNo, cityNo);
+                result = aiTravelService.generateTravelCourse(provinceNo, cityNo, themeNo, constraintNo);
                 log.info("AITravelService로 코스 생성 - resultNo: {}", result.getNo());
             } else {
                 log.error("여행 코스 생성 서비스가 없습니다.");
@@ -169,6 +207,8 @@ public class RandomPrototypeController {
                     .no(result.getNo())
                     .cityNo(result.getCityNo())
                     .provinceNo(result.getProvinceNo())
+                    .themeNo(result.getThemeNo())
+                    .constraintNo(result.getConstraintNo())
                     .location(result.getLocation())
                     .course1(course1)
                     .course2(course2)

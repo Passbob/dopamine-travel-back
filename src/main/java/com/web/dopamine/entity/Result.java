@@ -30,6 +30,12 @@ public class Result {
     @Column(name = "location")
     private String location;
     
+    @Column(name = "theme")
+    private Integer themeNo;
+    
+    @Column(name = "`constraint`")
+    private Integer constraintNo;
+    
     @Column(name = "course1", columnDefinition = "TEXT")
     private String course1;
     
@@ -71,13 +77,26 @@ public class Result {
     @ManyToOne
     @JoinColumn(name = "province_no", insertable = false, updatable = false)
     private Province province;
+    
+    @ManyToOne
+    @JoinColumn(name = "theme", insertable = false, updatable = false)
+    private Theme theme;
+    
+    @ManyToOne
+    @JoinColumn(name = "`constraint`", insertable = false, updatable = false)
+    private Constraint constraint;
 
     @Builder
-    public Result(Integer no, Integer cityNo, Integer provinceNo, String location, String course1, String course2, String course3, String course4, String course5, String course6, String course7, String course8, String course9, String course10, LocalDateTime createdAt, City city, Province province) {
+    public Result(Integer no, Integer cityNo, Integer provinceNo, String location, Integer themeNo, Integer constraintNo, 
+                String course1, String course2, String course3, String course4, String course5, 
+                String course6, String course7, String course8, String course9, String course10, 
+                LocalDateTime createdAt, City city, Province province, Theme theme, Constraint constraint) {
         this.no = no;
         this.cityNo = cityNo;
         this.provinceNo = provinceNo;
-        this.location = location;   
+        this.location = location;
+        this.themeNo = themeNo;
+        this.constraintNo = constraintNo;
         this.course1 = course1;
         this.course2 = course2;
         this.course3 = course3;
@@ -91,5 +110,7 @@ public class Result {
         this.createdAt = createdAt;
         this.city = city;
         this.province = province;
+        this.theme = theme;
+        this.constraint = constraint;
     }
 } 

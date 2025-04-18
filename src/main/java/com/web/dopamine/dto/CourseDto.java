@@ -16,6 +16,8 @@ public class CourseDto {
     private Integer no;
     private Integer cityNo;
     private Integer provinceNo;
+    private Integer themeNo;
+    private Integer constraintNo;
     private String location;
     private PlaceDto course1;
     private PlaceDto course2;

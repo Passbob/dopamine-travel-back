@@ -8,6 +8,8 @@ import com.web.dopamine.entity.Result;
 import com.web.dopamine.repository.CityRepository;
 import com.web.dopamine.repository.ProvinceRepository;
 import com.web.dopamine.repository.ResultRepository;
+import com.web.dopamine.repository.ThemeRepository;
+import com.web.dopamine.repository.ConstraintRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +41,8 @@ public class AITravelService {
     private final ProvinceRepository provinceRepository;
     private final CityRepository cityRepository;
     private final ResultRepository resultRepository;
+    private final ThemeRepository themeRepository;
+    private final ConstraintRepository constraintRepository;
 
     @Value("${openai.api.key}")
     private String openaiApiKey;
@@ -50,7 +54,7 @@ public class AITravelService {
      * AI를 통해 여행 코스를 생성하고 저장합니다.
      */
     @Transactional
-    public Result generateTravelCourse(Integer provinceNo, Integer cityNo) {
+    public Result generateTravelCourse(Integer provinceNo, Integer cityNo, Integer themeNo, Integer constraintNo) {
         // 도/시 정보 조회
         Province province = provinceRepository.findById(provinceNo)
                 .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 provinceNo입니다: " + provinceNo));
@@ -58,22 +62,26 @@ public class AITravelService {
         City city = cityRepository.findById(cityNo)
                 .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 cityNo입니다: " + cityNo));
 
-        // 이미 해당 지역의 결과가 있는지 확인
-        List<Result> existingResults = resultRepository.findByProvinceNoAndCityNo(provinceNo, cityNo);
-        if (!existingResults.isEmpty()) {
-            log.info("기존 여행 코스 결과 반환 - provinceNo: {}, cityNo: {}", provinceNo, cityNo);
-            return existingResults.get(0);
+        // 이미 정확히 동일한 지역, 테마, 제약조건의 결과가 있는지 확인하고 20% 확률로 기존 결과 반환
+        List<Result> exactResults = resultRepository.findByProvinceNoAndCityNoAndThemeNoAndConstraintNo(
+                provinceNo, cityNo, themeNo, constraintNo);
+        if (!exactResults.isEmpty() && Math.random() < 0.2) {
+            log.info("20% 확률로 정확히 일치하는 기존 여행 코스 결과 반환 - provinceNo: {}, cityNo: {}, themeNo: {}, constraintNo: {}", 
+                    provinceNo, cityNo, themeNo, constraintNo);
+            return exactResults.get(0);
         }
 
         // AI에 지역 정보 전달하고 여행 코스 생성 요청
         String location = province.getName() + " " + city.getName();
-        String[] courses = generateAITravelCourse(location);
+        String[] courses = generateAITravelCourse(location, themeNo, constraintNo);
 
         // 결과 저장
         Result result = Result.builder()
                 .provinceNo(provinceNo)
                 .cityNo(cityNo)
                 .location(location)
+                .themeNo(themeNo)
+                .constraintNo(constraintNo)
                 .course1(courses[0])
                 .course2(courses[1])
                 .course3(courses[2])
@@ -89,7 +97,18 @@ public class AITravelService {
     /**
      * OpenAI API를 호출하여 여행 코스를 생성합니다.
      */
-    private String[] generateAITravelCourse(String location) {
+    private String[] generateAITravelCourse(String location, Integer themeNo, Integer constraintNo) {
+        // 테마와 제약조건의 이름 가져오기
+        String themeName = themeRepository.findById(themeNo)
+                .map(theme -> theme.getName())
+                .orElse("일반 여행");
+                
+        String constraintName = constraintRepository.findById(constraintNo)
+                .map(constraint -> constraint.getName())
+                .orElse("제약 없음");
+                
+        log.info("여행 코스 생성 - 위치: {}, 테마: {}, 제약조건: {}", location, themeName, constraintName);
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(openaiApiKey);
@@ -97,10 +116,11 @@ public class AITravelService {
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("model", "gpt-3.5-turbo");
         requestBody.put("temperature", 0.7);
-        requestBody.put("max_tokens", 900);
+        requestBody.put("max_tokens", 1200);
 
         String prompt = "한국의 " + location + "에 1박 2일 여행 갈 계획입니다. " +
-                "추천할만한 관광 코스 6곳을 추천해주세요. " +
+                "테마는 " + themeName + "이고 제약조건은 " + constraintName + "입니다. " +
+                "이 조건에 맞는 추천할만한 관광 코스 6곳을 추천해주세요. " +
                 "거리와 동선을 고려하여 추천해주세요. " +
                 "첫날 3곳(day:1), 둘째날 3곳(day:2)으로 구성해 주시고, " +
                 "각 장소에 대해 이름, 간략한 설명, 위도(lat), 경도(lng) 정보를 포함해야 합니다. " +
