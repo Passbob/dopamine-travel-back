@@ -25,6 +25,7 @@ import com.web.dopamine.service.ThemeService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
@@ -32,7 +33,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.Inet4Address;
+import java.net.UnknownHostException;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
@@ -130,10 +134,26 @@ public class RandomPrototypeController {
         if (constraintNo == null) {
             constraintNo = 1; // 기본 제약조건 (DB에 존재하는 ID 사용)
         }
-        
+
         // 기존 데이터가 있는지 확인
         List<Result> existingResults = resultRepository.findByProvinceNoAndCityNoAndThemeNoAndConstraintNo(
                 provinceNo, cityNo, themeNo, constraintNo);
+
+        // 방문 로그 처리
+        String clientIp = getClientIp(request);
+        LocalDate today = LocalDate.now();
+
+        // 오늘 해당 IP의 방문 기록 확인
+        Optional<Visit> existingVisit = visitRepository.findByVisitDateAndIp(today, clientIp);
+
+        if(!existingVisit.isEmpty()) {
+            Visit visit = existingVisit.get();
+            if (visit.getResult1No() != null && visit.getResult2No() != null) {
+                // 3. 오늘 세 번째 이상 방문인 경우 (일일 제한 초과)
+                log.warn("일일 방문 횟수 초과 - IP: {}", clientIp);
+                return ApiResponse.error("DAILY_LIMIT_EXCEEDED", "일일 조회 횟수를 초과했습니다. 내일 다시 시도해주세요.");
+            }
+        }
         
         Result result;
         // 50% 확률로 기존 데이터 사용 또는 새로 생성
@@ -154,14 +174,6 @@ public class RandomPrototypeController {
                 return ApiResponse.error("SERVICE_UNAVAILABLE", "여행 코스 생성 서비스를 사용할 수 없습니다.");
             }
         }
-        
-        // 방문 로그 처리
-        String clientIp = getClientIp(request);
-        LocalDate today = LocalDate.now();
-        
-        // 오늘 해당 IP의 방문 기록 확인
-        Optional<Visit> existingVisit = visitRepository.findByVisitDateAndIp(today, clientIp);
-        
         if (existingVisit.isEmpty()) {
             // 1. 오늘 첫 방문인 경우
             Visit visit = Visit.builder()
@@ -173,16 +185,9 @@ public class RandomPrototypeController {
             log.info("새로운 방문 기록 저장 - IP: {}, 결과1: {}", clientIp, result.getNo());
         } else {
             Visit visit = existingVisit.get();
-            if (visit.getResult1No() != null && visit.getResult2No() == null) {
-                // 2. 오늘 두 번째 방문인 경우
                 visit.setResult2No(result.getNo());
                 visitRepository.save(visit);
                 log.info("두 번째 방문 결과 저장 - IP: {}, 결과2: {}", clientIp, result.getNo());
-            } else if (visit.getResult1No() != null && visit.getResult2No() != null) {
-                // 3. 오늘 세 번째 이상 방문인 경우 (일일 제한 초과)
-                log.warn("일일 방문 횟수 초과 - IP: {}", clientIp);
-                return ApiResponse.error("DAILY_LIMIT_EXCEEDED", "일일 조회 횟수를 초과했습니다. 내일 다시 시도해주세요.");
-            }
         }
         
         // Result 엔티티를 CourseDto로 변환
@@ -228,16 +233,55 @@ public class RandomPrototypeController {
      * 클라이언트 IP 주소 가져오기
      */
     private String getClientIp(HttpServletRequest request) {
-        String ipAddress = request.getHeader("X-Forwarded-For");
-        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
-            ipAddress = request.getHeader("Proxy-Client-IP");
+        String ip = null;
+        boolean isIpInHeader = false;
+
+        List<String> headerList = new ArrayList<>();
+        headerList.add("X-Forwarded-For");
+        headerList.add("HTTP_CLIENT_IP");
+        headerList.add("HTTP_X_FORWARDED_FOR");
+        headerList.add("HTTP_X_FORWARDED");
+        headerList.add("HTTP_FORWARDED_FOR");
+        headerList.add("HTTP_FORWARDED");
+        headerList.add("Proxy-Client-IP");
+        headerList.add("WL-Proxy-Client-IP");
+        headerList.add("HTTP_VIA");
+        headerList.add("IPV6_ADR");
+
+        for (String header : headerList) {
+            ip = request.getHeader(header);
+            if (ip != null && !ip.isEmpty() && !ip.equals("unknown")) {
+                isIpInHeader = true;
+                break;
+            }
         }
-        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
-            ipAddress = request.getHeader("WL-Proxy-Client-IP");
+
+        if (!isIpInHeader) {
+            ip = request.getRemoteAddr();
+        } else {
+            if (ip.contains(",")) {
+                ip = ip.split(",")[0]; // IP가 2개 이상일 때, 첫번째 IP만 가져옴
+            }
+
+            if ((StringUtils.countMatches(ip, '.') == 3) && ip.contains(":")) { // IPv4 + Port
+                ip = ip.split(":")[0];
+            } else if ((StringUtils.countMatches(ip, ':') > 1) && ip.contains("[")) { // IPv6 + Port
+                ip = ip.split("\\[")[1].split("\\]")[0];
+            }
         }
-        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
-            ipAddress = request.getRemoteAddr();
+
+        // IPv6 로컬호스트 주소를 IPv4로 변환
+        if (ip.equals("0:0:0:0:0:0:0:1")) {
+            try {
+                ip = Inet4Address.getLocalHost().getHostAddress();
+                log.info("IPv6 로컬호스트 주소를 IPv4로 변환: {}", ip);
+            } catch (UnknownHostException e) {
+                log.error("로컬호스트 주소 변환 중 오류 발생", e);
+                ip = "127.0.0.1"; // 기본 로컬호스트 주소로 설정
+            }
         }
-        return ipAddress;
+        
+        log.info("클라이언트 IP 주소: {}", ip);
+        return ip;
     }
 } 
